@@ -7,8 +7,9 @@ FROM smanx/deepseek-harness:devtools-min-latest
 #   python3, make, g++ — нативная сборка node-модулей плагинов (например node-pty
 #                        для терминала в dsh-better-sidebar)
 #   nano, mc, htop     — консольные утилиты для ручной работы внутри контейнера
+#   openssh-client     — ssh/ssh-agent для git по SSH и для gh/glab, если нужен ключ вместо токена
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gh python3 make g++ nano mc htop \
+    gh python3 make g++ nano mc htop openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # glab — аналог gh, но для GitLab. В репозиториях Debian его нет, ставим

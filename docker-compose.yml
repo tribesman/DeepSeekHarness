@@ -11,10 +11,15 @@ services:
     environment:
       - DSH_PORT=3079 # Внутренний порт DSH (оставляем по умолчанию)
       - PROXY_PORT=3080 # Порт встроенного прокси, смотрящего наружу
-      # - PROXY_USERNAME=admin # Логин для базовой авторизации в Web UI (опционально)
-      # - PROXY_PASSWORD=admin # Пароль (укажите свой!)
-      - OPENAI_API_KEY=sk-xxxx # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
+      # - PROXY_USERNAME=${PROXY_USERNAME} # Логин для базовой авторизации в Web UI (опционально)
+      # - PROXY_PASSWORD=${PROXY_PASSWORD} # Пароль (укажите свой!)
+      - OPENAI_API_KEY=${OPENAI_API_KEY} # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
       - DSH_MODEL=deepseek-chat # Дефолтная модель для агента
+      # gh/glab подхватывают эти переменные сами и работают без интерактивного
+      # `auth login` (там всё равно нет TTY) — просто наличие токена в окружении
+      # достаточно. Значения — в .env (см. .env.example), в git не попадают.
+      - GH_TOKEN=${GH_TOKEN}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
     volumes:
       # Bind-mount'ы вместо named volume: все файлы лежат прямо в ./data и
       # переживают `docker compose down` (и их легко открыть/починить руками).
