@@ -11,23 +11,18 @@ services:
     environment:
       - DSH_PORT=3079 # Внутренний порт DSH (оставляем по умолчанию)
       - PROXY_PORT=3080 # Порт встроенного прокси, смотрящего наружу
-      # - PROXY_USERNAME=${PROXY_USERNAME} # Логин для базовой авторизации в Web UI (опционально)
-      # - PROXY_PASSWORD=${PROXY_PASSWORD} # Пароль (укажите свой!)
-      - OPENAI_API_KEY=${OPENAI_API_KEY} # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
       - DSH_MODEL=deepseek-chat # Дефолтная модель для агента
-      # gh/glab подхватывают эти переменные сами и работают без интерактивного
-      # `auth login` (там всё равно нет TTY) — просто наличие токена в окружении
-      # достаточно. Значения — в .env (см. .env.example), в git не попадают.
-      - GH_TOKEN=${GH_TOKEN}
-      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      # OPENAI_API_KEY, GH_TOKEN, GITLAB_TOKEN, PROXY_USERNAME/PROXY_PASSWORD —
+      # секреты, сюда не пишем. Задаются в docker-compose.override.yml
+      # (в git не попадает, шаблон — docker-compose.override.example.yml).
     volumes:
       # Bind-mount'ы вместо named volume: все файлы лежат прямо в ./data и
       # переживают `docker compose down` (и их легко открыть/починить руками).
       - ./data/dsh-home:/root/.dsh # Сессии, чаты, settings.yaml, credentials, и ВСЕ плагины (node_modules профиля лежат тут же)
       - ./data/playwright-cache:/root/.cache/ms-playwright # Скачанный chromium для dsh-browser (иначе перекачивался бы заново при каждом пересоздании контейнера)
       - ./data/dsh-plugins:/root/dsh-plugins # Клон community-плагинов (worktree-launcher/changes-lens/agent-terminal), на них ссылаются симлинки внутри .dsh — эта папка лежит ВНЕ /root/.dsh, поэтому без отдельного bind-mount терялась бы при пересоздании контейнера
-      - ./workspace:/opt/workspace # Папка на хосте, в которой агент будет кодить
-      - /Users/tribesman/Documents/www/PHP/hlrd2021:/root/hlrd2021
+      # Папка для кода агента (./workspace) и любые другие персональные пути
+      # хоста — в docker-compose.override.yml, они у каждого свои.
     # ВАЖНО: entrypoint образа (/app/entrypoint.sh) игнорирует command целиком —
     # он всегда сам запускает `dsh web` и прокси. Весь статичный тулчейн
     # (gh, python3/make/g++, либы Chromium) теперь запечён в Dockerfile и не

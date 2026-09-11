@@ -1,0 +1,12 @@
+services:
+  deepseek-harness:
+    environment:
+      - OPENAI_API_KEY=sk-xxxx # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
+      # - PROXY_USERNAME=admin # Логин для базовой авторизации в Web UI (опционально)
+      # - PROXY_PASSWORD=admin # Пароль (укажите свой!)
+      - GH_TOKEN= # Personal access token GitHub (repo/read:org) — gh подхватит сам, без auth login
+      - GITLAB_TOKEN= # Personal access token GitLab — аналогично для glab
+    volumes:
+      - ./workspace:/opt/workspace # Папка на хосте, в которой агент будет кодить
+    extra_hosts:
+      - "parent:host-gateway"

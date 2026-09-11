@@ -2,10 +2,6 @@
 # кэш Chromium) — это состояние контейнера, а не часть проекта, и весит сотни МБ
 data/
 
-# Секреты (API-ключи, токены gh/glab) — реальные значения только тут,
-# в docker-compose.yml должны быть только ${VAR} ссылки. Шаблон: .env.example
-.env
-
 # IDE
 .idea/
 .vscode/
@@ -13,3 +9,7 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Секреты (API-ключи, токены gh/glab) и личные пути хоста — реальные значения
+# только тут, в git не попадают. Шаблон: docker-compose.override.example.yml
+docker-compose.override.yml
