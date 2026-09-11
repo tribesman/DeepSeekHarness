@@ -1,5 +1,13 @@
+# Persistent-данные DSH, код агента и состояние сессий — не часть образа
 data/
 workspace/
+.dsh/
+
+# Секреты (OPENAI_API_KEY, GH_TOKEN, GITLAB_TOKEN, PROXY_USERNAME/PASSWORD) и
+# личные пути хоста: файл в git не попадает, в контекст сборки — тоже
+docker-compose.override.yml
+
+# Служебное
 .git/
 .idea/
 .vscode/
