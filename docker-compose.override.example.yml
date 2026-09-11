@@ -15,10 +15,21 @@ services:
       # на который контейнер встаёт при старте. Плавающего main тут намеренно нет:
       # обновление — это правка этой строки + перезапуск контейнера, а не авто-pull.
       # - DSH_PLUGINS_REF=ac8dbb67e8cc4d252bfdfaf69078de1de0a5613a
+      # Конфиг git держим внутри /root/.dsh — единственного пути, который переживает
+      # пересоздание контейнера. Туда `gh auth login` кладёт credential helper (им git
+      # и пускает в приватные репозитории), а `git config --global user.*` — имя
+      # и почту для коммитов. По умолчанию это /root/.gitconfig, и он уезжает.
+      - GIT_CONFIG_GLOBAL=/root/.dsh/gitconfig
     volumes:
       - ./workspace:/opt/workspace # Папка на хосте, в которой агент будет кодить
+      # Логины gh/glab лежат вне персистимых путей (/root/.config/{gh,glab-cli}),
+      # поэтому после пересоздания контейнера приходится логиниться заново.
+      # Проброс ниже это чинит. Вместо ./data можно указать пути хоста
+      # (${HOME}/.config/gh, ${HOME}/.config/glab-cli, ${HOME}/.gitconfig) — тогда
+      # вход будет один на контейнер и хост.
+      - ./data/gh-config:/root/.config/gh
+      - ./data/glab-config:/root/.config/glab-cli
       # Git-доступ к приватным репозиториям подключается вручную (см. README):
-      # - ./data/gitconfig:/root/.gitconfig # credential helper от gh/glab переживёт пересоздание контейнера
       # - ${HOME}/.ssh:/root/.ssh:ro # ключи для git по SSH
     extra_hosts:
       - "parent:host-gateway"

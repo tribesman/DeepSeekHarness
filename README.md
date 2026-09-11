@@ -96,23 +96,31 @@ docker compose build && docker compose up -d
 ## Git-доступ к приватным репозиториям (по желанию)
 
 `GH_TOKEN`/`GITLAB_TOKEN` закрывают только API: `git` сам их не читает, поэтому
-клонирование и пуш приватных репозиториев из контейнера нужно подключить
-осознанно. Ниже — два рабочих варианта, оба делаются один раз.
+клонирование и пуш приватных репозиториев из контейнера подключается отдельно.
 
-**HTTPS + credential helper.** В `docker-compose.override.yml` добавьте проброс
-конфига, чтобы настройка пережила пересоздание контейнера:
+**Чтобы логин не слетал при пересоздании контейнера.** Из содержимого образа
+переживает только `/root/.dsh` (это `./data/dsh-home`), а `gh`/`glab` держат вход
+в `/root/.config/gh` и `/root/.config/glab-cli`; кроме того, `gh auth login`
+прописывает credential helper для git в `/root/.gitconfig`. Поэтому в шаблоне
+`docker-compose.override.example.yml` уже есть проброс: логины примонтированы из
+`./data/gh-config` и `./data/glab-config`, а конфиг git уведён в персистимый путь
+переменной `GIT_CONFIG_GLOBAL=/root/.dsh/gitconfig`. Без этого после
+`docker compose up -d` с пересозданием контейнера логин и доступ git к приватным
+репозиториям придётся настраивать заново. Если хочется один вход на контейнер
+и хост — подставьте вместо `./data/...` пути `${HOME}/.config/gh`,
+`${HOME}/.config/glab-cli` и `${HOME}/.gitconfig`.
 
-```yaml
-    volumes:
-      - ./data/gitconfig:/root/.gitconfig
-```
+Дальше — два рабочих варианта, оба делаются один раз.
 
-затем в контейнере один раз выполните:
+**HTTPS + credential helper.** В контейнере выполните:
 
 ```bash
-docker compose exec deepseek-harness gh auth setup-git     # GitHub: helper для git
+docker compose exec deepseek-harness gh auth login            # GitHub: вход + helper для git
 docker compose exec deepseek-harness glab auth login --hostname gitlab.com --stdin < token.txt
 ```
+
+Если `gh` авторизован только переменной `GH_TOKEN` (интерактивный вход не
+делали), helper ставится отдельно: `docker compose exec deepseek-harness gh auth setup-git`.
 
 **SSH с ключом.** Смонтируйте ключи, а если ключ под паролем — дополнительно
 пробросьте сокет ssh-agent'а хоста:
