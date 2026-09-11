@@ -12,9 +12,17 @@ services:
       - DSH_PORT=3079 # Внутренний порт DSH (оставляем по умолчанию)
       - PROXY_PORT=3080 # Порт встроенного прокси, смотрящего наружу
       - DSH_MODEL=deepseek-chat # Дефолтная модель для агента
+      # Community-плагины: откуда брать и на каком коммите стоять (см. command).
+      # Тегов апстрим не публикует, поэтому пин — на конкретный коммит; обновление
+      # делается правкой DSH_PLUGINS_REF (в docker-compose.override.yml) и
+      # перезапуском контейнера, а не автоматическим pull'ом ветки main.
+      - DSH_PLUGINS_REPO=https://github.com/steve-magne/dsh-plugins
+      - DSH_PLUGINS_REF=ac8dbb67e8cc4d252bfdfaf69078de1de0a5613a
       # OPENAI_API_KEY, GH_TOKEN, GITLAB_TOKEN, PROXY_USERNAME/PROXY_PASSWORD —
       # секреты, сюда не пишем. Задаются в docker-compose.override.yml
       # (в git не попадает, шаблон — docker-compose.override.example.yml).
+      # PROXY_USERNAME/PROXY_PASSWORD обязательны: без них прокси отдаёт Web UI
+      # кому угодно без пароля.
     volumes:
       # Bind-mount'ы вместо named volume: все файлы лежат прямо в ./data и
       # переживают `docker compose down` (и их легко открыть/починить руками).
@@ -27,23 +35,47 @@ services:
     # он всегда сам запускает `dsh web` и прокси. Весь статичный тулчейн
     # (gh, python3/make/g++, либы Chromium) теперь запечён в Dockerfile и не
     # трогается здесь. Тут остаётся только то, что должно выполняться заново
-    # при каждом старте — обновление git-клона community-плагинов и докачка
-    # бинарника Chromium в bind-mounted кэш (сам бинарник в образ не запекаем).
+    # при каждом старте — приведение git-клона community-плагинов к запиненному
+    # коммиту и докачка бинарника Chromium в bind-mounted кэш.
+    # Оба шага — необязательные: если сети нет, контейнер печатает
+    # предупреждение и стартует на том, что уже лежит в ./data.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
         # Community-плагины (symlink'и на них уже лежат в /root/.dsh/profiles/web/node_modules/@dsh-plugins) —
-        # клонируем один раз в bind-mounted /root/dsh-plugins, дальше просто обновляем.
-        if [ -d /root/dsh-plugins/.git ]; then
-          git -C /root/dsh-plugins pull --ff-only || true
+        # пакеты лежат в bind-mounted /root/dsh-plugins. Приводим копию ровно к
+        # DSH_PLUGINS_REF (коммит/тег) и ничего не тянем с плавающего main:
+        # смена рефа — осознанное действие (правка docker-compose.override.yml
+        # + перезапуск), а не сюрприз при каждом старте контейнера.
+        PLUGINS_DIR=/root/dsh-plugins
+        PLUGINS_REPO="$${DSH_PLUGINS_REPO:-https://github.com/steve-magne/dsh-plugins}"
+        PLUGINS_REF="$${DSH_PLUGINS_REF:-}"
+        if [ ! -d "$$PLUGINS_DIR/.git" ]; then
+          git init -q -b main "$$PLUGINS_DIR"
+          git -C "$$PLUGINS_DIR" remote add origin "$$PLUGINS_REPO"
         else
-          git clone https://github.com/steve-magne/dsh-plugins /root/dsh-plugins
+          git -C "$$PLUGINS_DIR" remote set-url origin "$$PLUGINS_REPO"
+        fi
+        if [ -n "$$PLUGINS_REF" ]; then
+          if ! git -C "$$PLUGINS_DIR" fetch -q origin "$$PLUGINS_REF"; then
+            echo "[plugins] ПРЕДУПРЕЖДЕНИЕ: не удалось получить $$PLUGINS_REF (нет сети?) — стартую на текущей копии" >&2
+          elif [ -n "$$(git -C "$$PLUGINS_DIR" status --porcelain)" ]; then
+            echo "[plugins] ПРЕДУПРЕЖДЕНИЕ: в $$PLUGINS_DIR есть локальные изменения — реф не переключаю, чтобы их не потерять" >&2
+          elif [ "$$(git -C "$$PLUGINS_DIR" rev-parse HEAD 2>/dev/null)" = "$$(git -C "$$PLUGINS_DIR" rev-parse FETCH_HEAD)" ]; then
+            echo "[plugins] community-плагины уже на $$PLUGINS_REF"
+          else
+            git -C "$$PLUGINS_DIR" checkout -q --detach FETCH_HEAD
+            echo "[plugins] community-плагины переключены на $$PLUGINS_REF"
+          fi
         fi
         # Докачиваем бинарник Chromium в bind-mounted кэш, если его там ещё нет
         # (быстро и no-op, если уже скачан) — системные либы уже в образе.
+        # Сбой докачки не валит контейнер: работаем на том, что есть в кэше.
         PW_BIN=/root/.dsh/profiles/web/node_modules/.bin/playwright-core
         if [ -x "$$PW_BIN" ]; then
-          "$$PW_BIN" install chromium
+          "$$PW_BIN" install chromium || echo "[browser] ПРЕДУПРЕЖДЕНИЕ: не удалось докачать Chromium — использую то, что есть в кэше" >&2
+        else
+          echo "[browser] ПРЕДУПРЕЖДЕНИЕ: $$PW_BIN не найден — шаг докачки пропущен" >&2
         fi
         exec /app/entrypoint.sh

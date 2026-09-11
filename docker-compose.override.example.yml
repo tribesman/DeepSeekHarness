@@ -2,11 +2,23 @@ services:
   deepseek-harness:
     environment:
       - OPENAI_API_KEY=sk-xxxx # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
-      # - PROXY_USERNAME=admin # Логин для базовой авторизации в Web UI (опционально)
-      # - PROXY_PASSWORD=admin # Пароль (укажите свой!)
-      - GH_TOKEN= # Personal access token GitHub (repo/read:org) — gh подхватит сам, без auth login
-      - GITLAB_TOKEN= # Personal access token GitLab — аналогично для glab
+      # Basic Auth для прокси, через который Web UI смотрит наружу (порт 3080).
+      # Прокси включает проверку пароля только когда заданы ОБА значения, поэтому
+      # строки ниже нужно заполнить своими: без них любой, кто дотянется до порта
+      # 3080 (в т.ч. вся ваша локальная сеть и Wi-Fi), получит полноценную сессию
+      # агента с шеллом в контейнере и доступом к смонтированным папкам хоста.
+      - PROXY_USERNAME=admin # Логин — обязательно смените на свой
+      - PROXY_PASSWORD=change-me # Пароль — обязательно смените на свой
+      - GH_TOKEN= # Personal access token GitHub (repo/read:org) — для API/плагинов, для git по HTTPS его надо подключить отдельно (см. README)
+      - GITLAB_TOKEN= # Personal access token GitLab — то же самое
+      # Пин community-плагинов (github.com/steve-magne/dsh-plugins): коммит или тег,
+      # на который контейнер встаёт при старте. Плавающего main тут намеренно нет:
+      # обновление — это правка этой строки + перезапуск контейнера, а не авто-pull.
+      # - DSH_PLUGINS_REF=ac8dbb67e8cc4d252bfdfaf69078de1de0a5613a
     volumes:
       - ./workspace:/opt/workspace # Папка на хосте, в которой агент будет кодить
+      # Git-доступ к приватным репозиториям подключается вручную (см. README):
+      # - ./data/gitconfig:/root/.gitconfig # credential helper от gh/glab переживёт пересоздание контейнера
+      # - ${HOME}/.ssh:/root/.ssh:ro # ключи для git по SSH
     extra_hosts:
       - "parent:host-gateway"
