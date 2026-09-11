@@ -1,0 +1,11 @@
+# Persistent runtime-данные DSH (сессии, чаты, credentials, node_modules плагинов,
+# кэш Chromium) — это состояние контейнера, а не часть проекта, и весит сотни МБ
+data/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

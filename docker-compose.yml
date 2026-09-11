@@ -1,0 +1,49 @@
+services:
+  deepseek-harness:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: deepseek-harness:devtools-min-custom # собранный локально образ с gh/python3/make/g++/libs для Chromium (см. Dockerfile)
+    container_name: deepseek-harness
+    restart: unless-stopped
+    ports:
+      - "3080:3080" # Внешний порт для доступа к Web UI
+    environment:
+      - DSH_PORT=3079 # Внутренний порт DSH (оставляем по умолчанию)
+      - PROXY_PORT=3080 # Порт встроенного прокси, смотрящего наружу
+      # - PROXY_USERNAME=admin # Логин для базовой авторизации в Web UI (опционально)
+      # - PROXY_PASSWORD=admin # Пароль (укажите свой!)
+      - OPENAI_API_KEY=sk-xxxx # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
+      - DSH_MODEL=deepseek-chat # Дефолтная модель для агента
+    volumes:
+      # Bind-mount'ы вместо named volume: все файлы лежат прямо в ./data и
+      # переживают `docker compose down` (и их легко открыть/починить руками).
+      - ./data/dsh-home:/root/.dsh # Сессии, чаты, settings.yaml, credentials, и ВСЕ плагины (node_modules профиля лежат тут же)
+      - ./data/playwright-cache:/root/.cache/ms-playwright # Скачанный chromium для dsh-browser (иначе перекачивался бы заново при каждом пересоздании контейнера)
+      - ./data/dsh-plugins:/root/dsh-plugins # Клон community-плагинов (worktree-launcher/changes-lens/agent-terminal), на них ссылаются симлинки внутри .dsh — эта папка лежит ВНЕ /root/.dsh, поэтому без отдельного bind-mount терялась бы при пересоздании контейнера
+      - ./workspace:/opt/workspace # Папка на хосте, в которой агент будет кодить
+      - /Users/tribesman/Documents/www/PHP/hlrd2021:/root/hlrd2021
+    # ВАЖНО: entrypoint образа (/app/entrypoint.sh) игнорирует command целиком —
+    # он всегда сам запускает `dsh web` и прокси. Весь статичный тулчейн
+    # (gh, python3/make/g++, либы Chromium) теперь запечён в Dockerfile и не
+    # трогается здесь. Тут остаётся только то, что должно выполняться заново
+    # при каждом старте — обновление git-клона community-плагинов и докачка
+    # бинарника Chromium в bind-mounted кэш (сам бинарник в образ не запекаем).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        # Community-плагины (symlink'и на них уже лежат в /root/.dsh/profiles/web/node_modules/@dsh-plugins) —
+        # клонируем один раз в bind-mounted /root/dsh-plugins, дальше просто обновляем.
+        if [ -d /root/dsh-plugins/.git ]; then
+          git -C /root/dsh-plugins pull --ff-only || true
+        else
+          git clone https://github.com/steve-magne/dsh-plugins /root/dsh-plugins
+        fi
+        # Докачиваем бинарник Chromium в bind-mounted кэш, если его там ещё нет
+        # (быстро и no-op, если уже скачан) — системные либы уже в образе.
+        PW_BIN=/root/.dsh/profiles/web/node_modules/.bin/playwright-core
+        if [ -x "$$PW_BIN" ]; then
+          "$$PW_BIN" install chromium
+        fi
+        exec /app/entrypoint.sh
