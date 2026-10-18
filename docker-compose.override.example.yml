@@ -1,35 +1,25 @@
+# Необязательные машинные дополнения к docker-compose.yml.
+#
+# Всё основное (секреты, порты, рабочая папка, логины gh/glab) уже приходит
+# из .env в сам docker-compose.yml, поэтому этот файл нужен только для того,
+# что у каждой машины своё: SSH-ключи/ssh-agent, дополнительные проекты,
+# extra_hosts. Docker Compose подхватывает docker-compose.override.yml
+# автоматически, если он лежит рядом с docker-compose.yml.
+#
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#
+# Ниже рабочие примеры — раскомментируйте нужные строки.
+
 services:
   deepseek-harness:
-    environment:
-      - OPENAI_API_KEY=sk-xxxx # Ваш API-ключ (DeepSeek, OpenRouter или OpenAI)
-      # Basic Auth для прокси, через который Web UI смотрит наружу (порт 3080).
-      # Прокси включает проверку пароля только когда заданы ОБА значения, поэтому
-      # строки ниже нужно заполнить своими: без них любой, кто дотянется до порта
-      # 3080 (в т.ч. вся ваша локальная сеть и Wi-Fi), получит полноценную сессию
-      # агента с шеллом в контейнере и доступом к смонтированным папкам хоста.
-      - PROXY_USERNAME=admin # Логин — обязательно смените на свой
-      - PROXY_PASSWORD=change-me # Пароль — обязательно смените на свой
-      - GH_TOKEN= # Personal access token GitHub (repo/read:org) — для API/плагинов, для git по HTTPS его надо подключить отдельно (см. README)
-      - GITLAB_TOKEN= # Personal access token GitLab — то же самое
-      # Пин community-плагинов (github.com/steve-magne/dsh-plugins): коммит или тег,
-      # на который контейнер встаёт при старте. Плавающего main тут намеренно нет:
-      # обновление — это правка этой строки + перезапуск контейнера, а не авто-pull.
-      # - DSH_PLUGINS_REF=ac8dbb67e8cc4d252bfdfaf69078de1de0a5613a
-      # Конфиг git держим внутри /root/.dsh — единственного пути, который переживает
-      # пересоздание контейнера. Туда `gh auth login` кладёт credential helper (им git
-      # и пускает в приватные репозитории), а `git config --global user.*` — имя
-      # и почту для коммитов. По умолчанию это /root/.gitconfig, и он уезжает.
-      - GIT_CONFIG_GLOBAL=/root/.dsh/gitconfig
-    volumes:
-      - ./workspace:/opt/workspace # Папка на хосте, в которой агент будет кодить
-      # Логины gh/glab лежат вне персистимых путей (/root/.config/{gh,glab-cli}),
-      # поэтому после пересоздания контейнера приходится логиниться заново.
-      # Проброс ниже это чинит. Вместо ./data можно указать пути хоста
-      # (${HOME}/.config/gh, ${HOME}/.config/glab-cli, ${HOME}/.gitconfig) — тогда
-      # вход будет один на контейнер и хост.
-      - ./data/gh-config:/root/.config/gh
-      - ./data/glab-config:/root/.config/glab-cli
-      # Git-доступ к приватным репозиториям подключается вручную (см. README):
-      # - ${HOME}/.ssh:/root/.ssh:ro # ключи для git по SSH
+    # ssh-agent хоста — только если ключ под паролем и сокет проброшен ниже.
+    # environment:
+    #   - SSH_AUTH_SOCK=/ssh-agent
+    #
+    # volumes:
+    #   - ${SSH_DIR}:/root/.ssh:ro # ключи для git по SSH (SSH_DIR в .env)
+    #   - ${SSH_AUTH_SOCK_PATH}:/ssh-agent # сокет ssh-agent (SSH_AUTH_SOCK_PATH в .env)
+    #   - ${PROJECT_HLRD_DIR}:/root/hlrd2021 # доп. проект агента (путь в .env)
+    #   - ${PROJECT_DATING_DIR}:/root/dating-app # доп. проект агента (путь в .env)
     extra_hosts:
-      - "parent:host-gateway"
+      - "parent:host-gateway" # пример: доступ к хосту по имени parent
