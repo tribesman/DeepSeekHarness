@@ -14,10 +14,17 @@ git worktree и браузерная автоматизация.
     репозитория Debian (там `gh` 2.23.0 от 2023 года), а из официальных релизов:
     версии прибиты (`ARG GH_VERSION`, `ARG GLAB_VERSION`), скачанные `.deb`
     проверяются по контрольной сумме того же релиза
-  - `python3`, `make`, `g++` — сборка нативных node-модулей плагинов (например
-    `node-pty` для терминала в `dsh-better-sidebar`)
+  - `python3` + `pip`/`venv`, `make`, `g++`, `pkg-config` — скрипты и сборка
+    нативных node-модулей плагинов (например `node-pty` для терминала в
+    `dsh-better-sidebar`). `pip install` работает в venv: системный Python в
+    Debian помечен PEP 668, а `uv` для Python-пакетов уже есть в базе
+  - `php-cli` + `composer` (PHP 8.2 из bookworm) с расширениями
+    curl/gd/intl/mbstring/mysql/xml/zip/bcmath/sqlite3 — `composer install`,
+    `phpunit`, миграции
+  - `mariadb-client`, `sqlite3` — консольные клиенты БД
+  - `nano`, `mc`, `htop`, `tmux`, `rsync`, `ripgrep`, `file`, `zip`,
+    `poppler-utils` (`pdftotext`) — утилиты для ручной работы в контейнере
   - системные библиотеки для headless Chromium (нужны `dsh-browser` / Playwright)
-  - `nano`, `mc`, `htop` — консольные утилиты для ручной работы в контейнере
 - **`docker-compose.yml`** — поднимает контейнер и монтирует persistent-данные с
   хоста (см. ниже). Порты, модель, плагины, секреты и пути подставляются из
   `.env` — литеральных доступов в файле нет
@@ -115,6 +122,13 @@ Mac в домашней сети), поставьте `PROXY_BIND=0.0.0.0` — �
 
 ```bash
 docker compose build && docker compose up -d
+```
+
+Проверить, что тулчейн на месте:
+
+```bash
+docker compose exec deepseek-harness sh -lc \
+  'python3 -V && php -v | head -1 && composer -V && mysql --version'
 ```
 
 ## Синхронизация на VDS (`make sync`)
