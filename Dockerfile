@@ -5,13 +5,29 @@ FROM smanx/deepseek-harness:devtools-min-latest
 #
 #   gh                 — для dsh-github-cli / любых GitHub-плагинов сайдбара
 #                        (ставится ниже из официальных релизов, см. ARG GH_VERSION)
-#   python3, make, g++ — нативная сборка node-модулей плагинов (например node-pty
-#                        для терминала в dsh-better-sidebar)
-#   nano, mc, htop     — консольные утилиты для ручной работы внутри контейнера
+#   glab               — то же для GitLab (ниже, из .deb-релиза GitLab)
+#   python3 (+pip, venv), make, g++, pkg-config
+#                      — скрипты и нативная сборка node-модулей плагинов
+#                        (например node-pty для терминала в dsh-better-sidebar);
+#                        pip-пакеты ставятся в venv — системный Python в Debian
+#                        помечен PEP 668, а uv для Python уже есть в базе
+#   php-cli + composer — PHP-проекты: composer install, phpunit, миграции;
+#                        расширения — curl/gd/intl/mbstring/mysql/xml/zip/bcmath/sqlite3
+#   mariadb-client, sqlite3 — консольные клиенты БД (mysql/mariadb и sqlite3)
+#   nano, mc, htop, tmux, rsync, ripgrep, file, zip, poppler-utils
+#                      — утилиты для ручной работы в контейнере (pdftotext идёт
+#                        из poppler-utils, rg — быстрый поиск по коду)
 #   openssh-client     — ssh/ssh-agent для git по SSH и для gh/glab, если нужен ключ вместо токена
 #                        (сами ключи/агент в контейнер не пробрасываются — см. README)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ nano mc htop openssh-client \
+    python3 python3-pip python3-venv pkg-config \
+    make g++ \
+    nano mc htop tmux \
+    openssh-client rsync \
+    ripgrep file zip poppler-utils sqlite3 \
+    mariadb-client \
+    php-cli php-curl php-gd php-intl php-mbstring php-mysql php-xml php-zip php-bcmath php-sqlite3 \
+    composer \
     && rm -rf /var/lib/apt/lists/*
 
 # gh — из официальных релизов cli.github.com, а не из репозитория Debian:

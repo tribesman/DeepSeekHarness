@@ -18,6 +18,10 @@ workspace/
 .DS_Store
 Thumbs.db
 
-# Секреты (API-ключи, токены gh/glab) и личные пути хоста — реальные значения
-# только тут, в git не попадают. Шаблон: docker-compose.override.example.yml
+# Секреты (API-ключи, токены gh/glab, Basic Auth), пути и порты этой машины —
+# реальные значения только в .env, в git не попадают. Шаблон: .env.example
+.env
+
+# Необязательные машинные дополнения к docker-compose.yml (ключи/ssh-agent,
+# лишние проекты, extra_hosts). Шаблон: docker-compose.override.example.yml
 docker-compose.override.yml

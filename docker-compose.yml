@@ -6,31 +6,44 @@ services:
     image: deepseek-harness:devtools-min-custom # собранный локально образ с gh/python3/make/g++/libs для Chromium (см. Dockerfile)
     container_name: deepseek-harness
     restart: unless-stopped
+    # Наружу смотрит только встроенный прокси образа: DSH сам слушает 127.0.0.1
+    # внутри контейнера, прокси — на PROXY_PORT и с Basic Auth (см. README).
+    # PROXY_BIND=127.0.0.1 — порт доступен только с хоста (VDS за TLS-прокси);
+    # PROXY_BIND=0.0.0.0 — доступен всей сети (например, Mac в домашней сети).
     ports:
-      - "3080:3080" # Внешний порт для доступа к Web UI
+      - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-3080}:${PROXY_PORT:-3080}"
     environment:
-      - DSH_PORT=3079 # Внутренний порт DSH (оставляем по умолчанию)
-      - PROXY_PORT=3080 # Порт встроенного прокси, смотрящего наружу
-      - DSH_MODEL=deepseek-chat # Дефолтная модель для агента
+      - DSH_PORT=${DSH_PORT:-3079} # Внутренний порт DSH (оставляем по умолчанию)
+      - PROXY_PORT=${PROXY_PORT:-3080} # Порт встроенного прокси, смотрящего наружу
+      - DSH_MODEL=${DSH_MODEL:-deepseek-chat} # Дефолтная модель для агента
       # Community-плагины: откуда брать и на каком коммите стоять (см. command).
       # Тегов апстрим не публикует, поэтому пин — на конкретный коммит; обновление
-      # делается правкой DSH_PLUGINS_REF (в docker-compose.override.yml) и
-      # перезапуском контейнера, а не автоматическим pull'ом ветки main.
-      - DSH_PLUGINS_REPO=https://github.com/steve-magne/dsh-plugins
-      - DSH_PLUGINS_REF=ac8dbb67e8cc4d252bfdfaf69078de1de0a5613a
-      # OPENAI_API_KEY, GH_TOKEN, GITLAB_TOKEN, PROXY_USERNAME/PROXY_PASSWORD —
-      # секреты, сюда не пишем. Задаются в docker-compose.override.yml
-      # (в git не попадает, шаблон — docker-compose.override.example.yml).
+      # делается правкой DSH_PLUGINS_REF (в .env) и перезапуском контейнера,
+      # а не автоматическим pull'ом ветки main.
+      - DSH_PLUGINS_REPO=${DSH_PLUGINS_REPO:-https://github.com/steve-magne/dsh-plugins}
+      - DSH_PLUGINS_REF=${DSH_PLUGINS_REF:-ac8dbb67e8cc4d252bfdfaf69078de1de0a5613a}
+      # Секреты и доступы — только из .env (шаблон .env.example). Литеральных
+      # значений в этом файле нет, поэтому его не стыдно коммитить.
       # PROXY_USERNAME/PROXY_PASSWORD обязательны: без них прокси отдаёт Web UI
       # кому угодно без пароля.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - PROXY_USERNAME=${PROXY_USERNAME:-}
+      - PROXY_PASSWORD=${PROXY_PASSWORD:-}
+      - GH_TOKEN=${GH_TOKEN:-}
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+      - GIT_CONFIG_GLOBAL=${GIT_CONFIG_GLOBAL:-/root/.dsh/gitconfig}
     volumes:
       # Bind-mount'ы вместо named volume: все файлы лежат прямо в ./data и
       # переживают `docker compose down` (и их легко открыть/починить руками).
       - ./data/dsh-home:/root/.dsh # Сессии, чаты, settings.yaml, credentials, и ВСЕ плагины (node_modules профиля лежат тут же)
       - ./data/playwright-cache:/root/.cache/ms-playwright # Скачанный chromium для dsh-browser (иначе перекачивался бы заново при каждом пересоздании контейнера)
       - ./data/dsh-plugins:/root/dsh-plugins # Клон community-плагинов (worktree-launcher/changes-lens/agent-terminal), на них ссылаются симлинки внутри .dsh — эта папка лежит ВНЕ /root/.dsh, поэтому без отдельного bind-mount терялась бы при пересоздании контейнера
-      # Папка для кода агента (./workspace) и любые другие персональные пути
-      # хоста — в docker-compose.override.yml, они у каждого свои.
+      # Пути хоста — из .env; значения по умолчанию работают и без него.
+      - ${WORKSPACE_DIR:-./workspace}:/opt/workspace # Папка для кода агента (WORKSPACE_DIR)
+      - ${GH_CONFIG_DIR:-./data/gh-config}:/root/.config/gh # Логины gh (GH_CONFIG_DIR)
+      - ${GLAB_CONFIG_DIR:-./data/glab-config}:/root/.config/glab-cli # Логины glab (GLAB_CONFIG_DIR)
+      # Ключи/ssh-agent и доп. проекты — в docker-compose.override.yml,
+      # они у каждой машины свои.
     # ВАЖНО: entrypoint образа (/app/entrypoint.sh) игнорирует command целиком —
     # он всегда сам запускает `dsh web` и прокси. Весь статичный тулчейн
     # (gh, python3/make/g++, либы Chromium) теперь запечён в Dockerfile и не
@@ -46,8 +59,8 @@ services:
         # Community-плагины (symlink'и на них уже лежат в /root/.dsh/profiles/web/node_modules/@dsh-plugins) —
         # пакеты лежат в bind-mounted /root/dsh-plugins. Приводим копию ровно к
         # DSH_PLUGINS_REF (коммит/тег) и ничего не тянем с плавающего main:
-        # смена рефа — осознанное действие (правка docker-compose.override.yml
-        # + перезапуск), а не сюрприз при каждом старте контейнера.
+        # смена рефа — осознанное действие (правка .env + перезапуск),
+        # а не сюрприз при каждом старте контейнера.
         PLUGINS_DIR=/root/dsh-plugins
         PLUGINS_REPO="$${DSH_PLUGINS_REPO:-https://github.com/steve-magne/dsh-plugins}"
         PLUGINS_REF="$${DSH_PLUGINS_REF:-}"
