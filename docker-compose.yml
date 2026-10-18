@@ -3,8 +3,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # uid/gid, от которого работает контейнер (см. Dockerfile и README).
+        # Должен совпадать с пользователем, который делает `make sync` на VDS.
+        DSH_UID: ${DSH_UID:-1000}
+        DSH_GID: ${DSH_GID:-1000}
     image: deepseek-harness:devtools-min-custom # собранный локально образ с gh/python3/make/g++/libs для Chromium (см. Dockerfile)
     container_name: deepseek-harness
+    # Дублирует USER из Dockerfile, чтобы намерение было видно здесь и чтобы
+    # машинный override мог переопределить uid/gid (например, если на VDS
+    # пользователь не 1000).
+    user: "${DSH_UID:-1000}:${DSH_GID:-1000}"
     restart: unless-stopped
     # Наружу смотрит только встроенный прокси образа: DSH сам слушает 127.0.0.1
     # внутри контейнера, прокси — на PROXY_PORT и с Basic Auth (см. README).
@@ -13,6 +22,10 @@ services:
     ports:
       - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-3080}:${PROXY_PORT:-3080}"
     environment:
+      # HOME=/root важен: контейнер работает не от root, но данные монтируются
+      # в /root/... — от HOME зависят ~/.dsh, ~/.cache/ms-playwright, ~/.config.
+      - HOME=/root
+      - DSH_HOME=/root/.dsh # явно, чтобы не зависеть от вычисления home при смене uid
       - DSH_PORT=${DSH_PORT:-3079} # Внутренний порт DSH (оставляем по умолчанию)
       - PROXY_PORT=${PROXY_PORT:-3080} # Порт встроенного прокси, смотрящего наружу
       - DSH_MODEL=${DSH_MODEL:-deepseek-chat} # Дефолтная модель для агента

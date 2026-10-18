@@ -83,6 +83,7 @@ nano .env
 | Группа | Переменные |
 |---|---|
 | перенос на VDS | `VDS_HOST`, `VDS_USER`, `VDS_PORT`, `VDS_DIR`, `SSH_KEY`, `SYNC_EXCLUDES`, `RSYNC_FLAGS` |
+| права на `data/` | `DSH_UID`, `DSH_GID` |
 | сеть и порты | `DSH_PORT`, `PROXY_PORT`, `PROXY_BIND` |
 | модель и плагины | `DSH_MODEL`, `DSH_PLUGINS_REPO`, `DSH_PLUGINS_REF` |
 | секреты | `OPENAI_API_KEY`, `PROXY_USERNAME`, `PROXY_PASSWORD`, `GH_TOKEN`, `GITLAB_TOKEN` |
@@ -160,6 +161,39 @@ docker compose up -d --build
 
 Понадобятся SSH-доступ на VDS и `rsync` на обеих машинах (`apt install rsync`
 на сервере; на macOS подойдёт системный или `brew install rsync`).
+
+### Права на `data/` и `make sync`
+
+Контейнер работает от uid/gid `DSH_UID`/`DSH_GID` (по умолчанию `1000` —
+типичный первый пользователь Ubuntu/Debian), а не от root, и пишет в `./data`
+от него же. Поэтому файлы на хосте принадлежат тому же пользователю, под
+которым идёт `make sync`, и rsync может их перезаписывать.
+
+Если контейнер запущен от root, всё созданное им (новые сессии, `attachments`,
+`storages/*.json`) на хосте становится `root:root`, и синхронизация падает:
+
+```
+rsync: failed to set times on "...": Operation not permitted (1)
+rsync: [receiver] mkstemp "...": Permission denied (13)
+make: *** [sync] Error 23
+```
+
+Проверка на VDS — uid пользователя и владельцы файлов должны совпадать:
+
+```bash
+id -u; id -g
+ls -ln ~/dsh/data/dsh-home | head
+```
+
+Если `DSH_UID`/`DSH_GID` отличаются от `id -u`/`id -g` (или в `data/` остались
+файлы от root после запуска старой версии образа), поправьте один раз:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" ~/dsh/data
+```
+
+После изменения `DSH_UID`/`DSH_GID` образ нужно пересобрать —
+`docker compose up -d --build`: `USER` и `chown` запекаются в образ.
 
 Что делает `make sync`:
 

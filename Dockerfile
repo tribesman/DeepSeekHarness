@@ -64,3 +64,23 @@ RUN npm init -y >/dev/null 2>&1 && npm install --no-save playwright-core@1.63.0 
     && node_modules/.bin/playwright-core install-deps chromium \
     && rm -rf node_modules package.json package-lock.json \
     && rm -rf /var/lib/apt/lists/*
+
+# ── Пользователь контейнера ───────────────────────────────────────────────────
+# Контейнер работает от uid/gid пользователя VDS (DSH_UID/DSH_GID), а не от
+# root. Причина: данные лежат в bind-mount'ах ./data/... и должны принадлежать
+# тому же пользователю, под которым делается `make sync`. Если писать от root,
+# всё созданное контейнером (сессии, attachments, storages/*.json) на хосте
+# становится root:root, и rsync под обычным пользователем падает с
+# "Permission denied" и "failed to set times ... Operation not permitted".
+#
+#   /root  — отдаём этому uid: compose монтирует данные в /root/.dsh и
+#            /root/dsh-plugins, а симлинки плагинов ведут на /root/dsh-plugins;
+#   /app   — каталог, а не содержимое: entrypoint пишет туда .dsh-web.log и
+#            .dsh-launch-token, а код остаётся root-owned и read-only.
+#
+# После смены DSH_UID/DSH_GID образ нужно пересобрать: docker compose up -d --build.
+ARG DSH_UID=1000
+ARG DSH_GID=1000
+RUN chown -R ${DSH_UID}:${DSH_GID} /root \
+    && chown ${DSH_UID}:${DSH_GID} /app
+USER ${DSH_UID}:${DSH_GID}
