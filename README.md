@@ -23,9 +23,9 @@ git worktree и браузерная автоматизация.
   `.env` — литеральных доступов в файле нет
 - **`.env`** — все пути, порты и секреты для этой машины. В git не попадает,
   шаблон с комментарием к каждой переменной — `.env.example` (см. «Окружение»)
-- **`Makefile`** — задачи для работы с окружением: `make sync` переносит проект
-  и состояние `data/` на VDS (см. «Синхронизация на VDS»), `make sync-workspace`
-  отдельно переносит код агента
+- **`Makefile`** — задачи для работы с окружением: `make sync` переносит только
+  состояние `data/` на VDS (код и compose-файлы едут через git, см.
+  «Синхронизация на VDS»), `make sync-workspace` — отдельно код агента
 - **`data/`** — все данные DSH лежат на хосте бинд-маунтами и переживают
   `docker compose down` (в git не попадают, см. `.gitignore`):
   - `data/dsh-home` → `/root/.dsh` — сессии, чаты, `settings.yaml`, credentials
@@ -119,39 +119,48 @@ docker compose build && docker compose up -d
 
 ## Синхронизация на VDS (`make sync`)
 
-`make sync` переносит окружение на сервер по SSH/rsync: проект и состояние
-`data/` (сессии, настройки, credentials, установленные плагины, клон
-`dsh-plugins`). Кэши не переносятся — Chromium entrypoint докачает при старте.
-Понадобятся SSH-доступ на VDS, `rsync` на обеих машинах (`apt install rsync`
-на сервере; на macOS подойдёт системный или `brew install rsync`) и заполненные
-`VDS_HOST`/`VDS_USER`/`VDS_PORT`/`VDS_DIR` в `.env`.
+Код и compose-файлы приезжают на сервер через git, а `make sync` переносит
+**только состояние** — каталог `data/`: сессии, настройки, credentials,
+установленные плагины, клон `dsh-plugins`, конфиги gh/glab. Кэши не
+переносятся — Chromium entrypoint докачает при старте.
+
+Порядок:
+
+1. на VDS клонируйте репозиторий в `VDS_DIR` (один раз);
+2. с локальной машины выполните `make sync` — он создаст `data/` и зальёт
+   состояние по SSH/rsync;
+3. на VDS создайте `.env` (секреты и пути сервера) и запустите
+   `docker compose up -d --build`.
 
 ```bash
-make sync            # проект + состояние data/
-make sync-workspace  # отдельно WORKSPACE_DIR — код, с которым работает агент
+# на VDS
+git clone git@github.com:tribesman/DeepSeekHarness.git /srv/deepseek-harness
+
+# локально (VDS_HOST/VDS_USER/VDS_PORT/VDS_DIR — в .env)
+make sync
+
+# на VDS
+cd /srv/deepseek-harness && cp .env.example .env && nano .env
+docker compose up -d --build
 ```
 
-На сервере `WORKSPACE_DIR` по умолчанию `./workspace` — именно туда
-`make sync-workspace` складывает код, и именно эту папку монтирует контейнер.
+Понадобятся SSH-доступ на VDS и `rsync` на обеих машинах (`apt install rsync`
+на сервере; на macOS подойдёт системный или `brew install rsync`).
 
 Что делает `make sync`:
 
-1. создаёт `VDS_DIR` на сервере;
-2. копирует проект без `.git`, `.dsh`, `.env`, `data/` и `workspace/`;
-3. копирует `data/` без `playwright-cache` и `.pnpm-store`;
-4. подсказывает команду запуска.
+1. проверяет, что на VDS в `VDS_DIR` уже лежит репозиторий (если нет —
+   предупреждает, но `data/` всё равно создаёт);
+2. копирует `data/` без `playwright-cache` и `.pnpm-store`;
+3. подсказывает команду запуска.
+
+На сервере `WORKSPACE_DIR` по умолчанию `./workspace` — именно туда
+`make sync-workspace` складывает код, и именно эту папку монтирует контейнер.
+Если код агенту на VDS не нужен, этот шаг можно пропустить.
 
 `.env` на VDS не копируется: пути и секреты у сервера свои (как минимум
 `PROXY_BIND=127.0.0.1`, публичные хост/порт и пути хоста). Создайте его там
 один раз — вручную или `scp .env root@VDS:$VDS_DIR/`.
-
-Первый запуск на VDS:
-
-```bash
-ssh root@VDS
-cd /srv/deepseek-harness
-docker compose up -d --build
-```
 
 Повторный `make sync` обновляет файлы на месте; удалённые локально файлы он
 **не** удаляет (rsync без `--delete`) — состояние и `.env` сервера в

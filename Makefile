@@ -5,8 +5,9 @@
 #   nano .env
 #   make sync
 #
-# Если .env нет, переменные берутся из окружения/значений по умолчанию,
-# а `make sync` попросит задать VDS_HOST.
+# Код и compose-файлы приезжают на VDS через git, `make sync` переносит только
+# состояние (data/). Если .env нет, переменные берутся из окружения/значений по
+# умолчанию, а `make sync` попросит задать VDS_HOST.
 
 ifneq (,$(wildcard .env))
 include .env
@@ -27,18 +28,6 @@ WORKSPACE_DIR ?= ./workspace
 # тогда поставьте в .env: RSYNC_FLAGS = -aH -v
 RSYNC_FLAGS ?= -aH --info=progress2
 
-# Что не тащим в копии проекта: состояние и секреты едут отдельно,
-# рабочая папка агента — отдельной командой.
-PROJECT_EXCLUDES = \
-	--exclude=.git \
-	--exclude=.dsh \
-	--exclude=.env \
-	--exclude=data \
-	--exclude=workspace \
-	--exclude=.idea \
-	--exclude=.vscode \
-	--exclude=.DS_Store
-
 # Кэши, которые VDS соберёт/скачает сам.
 DATA_EXCLUDES = \
 	--exclude=playwright-cache \
@@ -52,23 +41,22 @@ RSYNC_CMD = rsync $(RSYNC_FLAGS) -e "$(SSH_CMD)" \
 .PHONY: help sync sync-workspace check-env
 
 help:
-	@echo "make sync           — перенести проект и состояние data/ на VDS"
-	@echo "make sync-workspace — перенести WORKSPACE_DIR (код) на VDS"
+	@echo "make sync           — перенести состояние data/ на VDS (код — через git)"
+	@echo "make sync-workspace — перенести WORKSPACE_DIR (код агента) на VDS"
 	@echo ""
 	@echo "Параметры — в .env (шаблон .env.example): VDS_HOST, VDS_USER, VDS_PORT,"
 	@echo "VDS_DIR, SSH_KEY, SYNC_EXCLUDES, RSYNC_FLAGS."
 
-## sync: проект и состояние (data/) на VDS по rsync
+## sync: состояние data/ на VDS (код и compose-файлы уже в git)
 sync: check-env
-	@echo "==> $(REMOTE):$(VDS_DIR)"
-	$(SSH_CMD) $(REMOTE) 'mkdir -p $(VDS_DIR)'
-	@echo "==> проект (без .git, .dsh, .env, data/, workspace/)"
-	$(RSYNC_CMD) $(PROJECT_EXCLUDES) ./ $(REMOTE):$(VDS_DIR)/
+	@echo "==> $(REMOTE):$(VDS_DIR)/data"
+	$(SSH_CMD) $(REMOTE) 'mkdir -p $(VDS_DIR)/data'
 	@if [ -d data ]; then \
-		echo "==> состояние data/ (без playwright-cache и .pnpm-store)"; \
+		$(SSH_CMD) $(REMOTE) 'test -f $(VDS_DIR)/docker-compose.yml' \
+			|| echo "==> предупреждение: в $(VDS_DIR) нет docker-compose.yml — сначала клонируйте репозиторий на VDS"; \
 		$(RSYNC_CMD) $(DATA_EXCLUDES) data/ $(REMOTE):$(VDS_DIR)/data/; \
 	else \
-		echo "==> каталога data/ нет — состояние не переносится"; \
+		echo "==> каталога data/ нет — переносить нечего"; exit 1; \
 	fi
 	@echo "==> готово. На VDS: cd $(VDS_DIR) && docker compose up -d --build"
 
